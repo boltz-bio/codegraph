@@ -1,0 +1,67 @@
+name: Boltz release
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  bundle:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            target: darwin-arm64
+            rust: aarch64-apple-darwin
+          - runner: macos-14
+            target: darwin-x64
+            rust: x86_64-apple-darwin
+          - runner: ubuntu-22.04
+            target: linux-x64
+            rust: x86_64-unknown-linux-gnu
+          - runner: ubuntu-22.04-arm
+            target: linux-arm64
+            rust: aarch64-unknown-linux-gnu
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.16.0
+          cache: npm
+      - run: npm ci
+      - name: Validate the extensions and their integration
+        run: npx vitest run --project engine __tests__/frameworks.test.ts __tests__/exclude-config.test.ts __tests__/ui-steps-cross-tier.test.ts __tests__/include-config.test.ts __tests__/frameworks-integration.test.ts __tests__/temporal-integration.test.ts __tests__/openapi-integration.test.ts __tests__/watcher.test.ts
+      - name: Build the native kernel and self-contained bundle
+        run: |
+          bash scripts/build-kernel.sh --target '${{ matrix.rust }}'
+          bash scripts/build-bundle.sh '${{ matrix.target }}' v24.16.0
+      - name: Smoke test the archive
+        if: matrix.target != 'darwin-x64'
+        run: |
+          mkdir smoke
+          tar -xzf 'release/codegraph-${{ matrix.target }}.tar.gz' -C smoke
+          'smoke/codegraph-${{ matrix.target }}/bin/codegraph' --version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundle-${{ matrix.target }}
+          path: release/codegraph-*.tar.gz
+          if-no-files-found: error
+  publish:
+    needs: bundle
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: bundle-*
+          merge-multiple: true
+          path: release
+      - name: Publish immutable versioned bundles
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(node -p 'require("./package.json").version')
+          (cd release && sha256sum codegraph-*.tar.gz > SHA256SUMS)
+          gh release create "v$version" release/codegraph-*.tar.gz release/SHA256SUMS --target "$GITHUB_SHA" --title "CodeGraph $version" --notes-file BOLTZ.md

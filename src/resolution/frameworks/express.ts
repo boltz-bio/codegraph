@@ -160,7 +160,7 @@ export const expressResolver: FrameworkResolver = {
     // Match the route head up to the first arg: (app|router).METHOD('/path',
     // (NOT the whole call — handlers are often inline arrows whose `)`/`{}` the
     // old single-regex couldn't span, so inline-handler routes connected to nothing.)
-    const head = /\b(app|router)\s*\.\s*(get|post|put|patch|delete|all|use)\s*\(\s*['"]([^'"]+)['"]\s*,/g;
+    const head = /\b(app|router|fastify)\s*\.\s*(get|post|put|patch|delete|head|options|all|use)\s*\(\s*['"]([^'"]+)['"]\s*,/g;
     let match: RegExpExecArray | null;
     while ((match = head.exec(safe)) !== null) {
       const method = match[2]!;
@@ -188,7 +188,11 @@ export const expressResolver: FrameworkResolver = {
       const args = closeParen > openParen ? safe.slice(openParen + 1, closeParen) : '';
       const arrowAt = args.indexOf('=>');
 
-      if (arrowAt >= 0) {
+      // Fastify's options object can contain arrows before a named handler.
+      const fastifyHandler = match[1] === 'fastify'
+        ? extractTailIdent(args.split(',').map(s => s.trim()).filter(Boolean).at(-1) ?? '')
+        : null;
+      if (arrowAt >= 0 && !fastifyHandler) {
         // Inline arrow handler (`router.post('/x', async (req,res) => {…})`). The
         // arrow is anonymous, so its body — the actual request→service flow — would
         // be lost. Attribute the body's calls to the route node as `calls` edges so
@@ -232,7 +236,7 @@ export const expressResolver: FrameworkResolver = {
           references.push({
             fromNodeId: routeNode.id,
             referenceName: handlerName,
-            referenceKind: 'references',
+            referenceKind: match[1] === 'fastify' ? 'calls' : 'references',
             line,
             column: 0,
             filePath,

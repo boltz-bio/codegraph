@@ -658,6 +658,9 @@ export class CodeGraph {
           if (process.env.CODEGRAPH_SYNTH_TIMINGS) console.error(`[synth-timing] deferredThisMember: ${Date.now() - tDeferred}ms`);
         }
 
+        await this.resolver.refreshOpenApiEdges();
+        await this.resolver.refreshTemporalEdges();
+
         // Refresh planner stats + checkpoint the WAL after bulk writes.
         // Off-thread (worker connection): on a multi-GB index this is minutes
         // of IO, and inline it starved the #850 watchdog AFTER a fully
@@ -993,6 +996,9 @@ export class CodeGraph {
           // member is inherited from a supertype (#808).
           await this.resolver.resolveDeferredThisMemberRefs();
         }
+
+        await this.resolver.refreshOpenApiEdges();
+        await this.resolver.refreshTemporalEdges();
 
         // Refresh planner stats + checkpoint the WAL after bulk writes.
         // Off-thread — see indexAll's call site.

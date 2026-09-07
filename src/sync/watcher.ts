@@ -34,7 +34,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { isSourceFile, buildScopeIgnore, type ScopeIgnore } from '../extraction';
-import { loadExtensionOverrides, PROJECT_CONFIG_FILENAME } from '../project-config';
+import { loadExtensionOverrides, loadOpenApiBindings, loadTemporalBindings, PROJECT_CONFIG_FILENAME } from '../project-config';
 import { logDebug, logWarn } from '../errors';
 import { normalizePath } from '../utils';
 import { isCodeGraphDataDir } from '../directory';
@@ -582,7 +582,18 @@ export class FileWatcher {
       this.refreshScope(rel);
       return;
     }
+    // Explicit contracts are often generated/ignored JSON, outside the source
+    // scanner. Their edits/deletions still invalidate derived HTTP edges.
+    if (loadOpenApiBindings(this.projectRoot).some(binding => binding.schema === rel)) {
+      this.scheduleSync();
+      return;
+    }
     if (this.ignoreMatcher && this.ignoreMatcher.ignores(rel)) return;
+    // Temporal registries can use a service's own TypeScript aliases.
+    if (/(^|\/)(?:tsconfig|jsconfig)(?:\.[^/]+)?\.json$/.test(rel) && loadTemporalBindings(this.projectRoot).length) {
+      this.scheduleSync();
+      return;
+    }
     // A nested `.gitignore` (an embedded child repo's own rules, #514, or a
     // subdirectory rule the git-backed full scan honors) is only a scope
     // change when it sits INSIDE the current scope — checked after the matcher

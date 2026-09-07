@@ -21,6 +21,9 @@ import { resolveViaImport, resolveJvmImport, extractImportMappings, extractReExp
 import { ResolverPool, minRefsForPool } from './resolver-pool';
 import { detectFrameworks } from './frameworks';
 import { synthesizeCallbackEdges } from './callback-synthesizer';
+import { openApiEdges, OPENAPI_SYNTHESIZER } from './openapi-synthesizer';
+import { loadOpenApiBindings, loadTemporalBindings } from '../project-config';
+import { temporalEdges, TEMPORAL_SYNTHESIZER } from './temporal-synthesizer';
 import { createYielder, type MaybeYield } from './cooperative-yield';
 import { loadProjectAliases, type AliasMap } from './path-aliases';
 import { loadGoModule, type GoModule } from './go-module';
@@ -1974,6 +1977,21 @@ export class ReferenceResolver {
       unresolved: [],
       stats: aggregateStats,
     };
+  }
+
+  /** Contracts may be unindexed JSON; refresh even on an otherwise empty sync. */
+  async refreshOpenApiEdges(): Promise<void> {
+    if (!loadOpenApiBindings(this.projectRoot).length && this.queries.getMetadata(`synthesized_edges:${OPENAPI_SYNTHESIZER}`) !== '1') return;
+    this.clearCaches();
+    const edges = await openApiEdges(this.context, createYielder());
+    this.queries.replaceSynthesizedEdges(OPENAPI_SYNTHESIZER, edges);
+  }
+
+  async refreshTemporalEdges(): Promise<void> {
+    if (!loadTemporalBindings(this.projectRoot).length && this.queries.getMetadata(`synthesized_edges:${TEMPORAL_SYNTHESIZER}`) !== '1') return;
+    this.clearCaches();
+    const { edges, claims } = await temporalEdges(this.context, createYielder());
+    this.queries.replaceTemporalEdges(claims, edges);
   }
 
   /**

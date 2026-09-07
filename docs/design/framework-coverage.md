@@ -54,6 +54,15 @@ despite where it lives) and the object-literal walker in
 
 ## What is left
 
+Local experiment: [Temporal activity routing](../temporal-activities.md) adds
+configured queue and worker registration evidence for typed activity proxies.
+It does not cover workflow clients, signals, or live worker availability.
+
+Local experiment: [OpenAPI generated clients](../openapi-generated-clients.md)
+adds explicit service/contract mappings and Fastify shorthand route-to-handler
+calls. It has bounded macOS validation. It does not establish complete Fastify
+coverage or automatic plugin-prefix discovery.
+
 Ordered by cost-to-value. Each row says what is missing, not merely that
 something is.
 

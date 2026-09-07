@@ -3426,6 +3426,27 @@ export class QueryBuilder {
     return out;
   }
 
+  /** Replace one derived edge set atomically, including removals after contract edits. */
+  replaceTemporalEdges(claims: { source: string; line: number; name: string }[], edges: Edge[]): void {
+    this.db.transaction(() => {
+      // A proxy's name match is not proof that a worker registers that activity.
+      // Replace only the call sites recognized by the Temporal pass; unrelated
+      // calls (including other calls on the same line) retain ordinary resolution.
+      const remove = this.db.prepare("DELETE FROM edges WHERE source = ? AND line = ? AND kind = 'calls' AND json_extract(metadata, '$.refName') = ?");
+      for (const claim of claims) remove.run(claim.source, claim.line, claim.name);
+      this.replaceSynthesizedEdges('temporal-activity', edges);
+    })();
+  }
+
+  /** Replace one derived edge set atomically, including removals after contract edits. */
+  replaceSynthesizedEdges(synthesizedBy: string, edges: Edge[]): void {
+    this.db.transaction(() => {
+      this.db.prepare("DELETE FROM edges WHERE json_extract(metadata, '$.synthesizedBy') = ?").run(synthesizedBy);
+      this.insertEdges(edges);
+      this.setMetadata(`synthesized_edges:${synthesizedBy}`, edges.length ? '1' : '0');
+    })();
+  }
+
   /** Delete edges by primary key — the rebind pass's half of a re-resolution. */
   deleteEdgesByIds(edgeIds: number[]): number {
     if (edgeIds.length === 0) return 0;

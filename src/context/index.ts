@@ -412,6 +412,10 @@ export class ContextBuilder {
         ? `renders <${String(m.via || 'child')}>`
         : m.synthesizedBy === 'vue-handler'
         ? `Vue @${String(m.event || 'event')} handler`
+        : m.synthesizedBy === 'temporal-activity'
+        ? `Temporal activity ${String(m.activity)}; queue=${String(m.taskQueue)}; namespace=${String(m.namespace)}; connection=${String(m.connection)}${at} (configured routing)`
+        : m.synthesizedBy === 'openapi-client'
+        ? `HTTP ${String(m.method)} ${String(m.href)} → ${String(m.service)} (OpenAPI; configured default, overrides possible)${at}`
         : m.synthesizedBy === 'http-client'
         ? `HTTP ${String(m.method || 'GET')} ${String(m.href || '')} — the client's call onto its own route${at}`
         : m.synthesizedBy === 'queue-job'

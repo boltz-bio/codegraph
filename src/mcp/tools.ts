@@ -2478,6 +2478,25 @@ export class ToolHandler {
         registeredAt,
       };
     }
+    if (m?.synthesizedBy === 'temporal-activity') {
+      const workers = Array.isArray(m.workers) ? m.workers as { name: string; mode: string; registry: string }[] : [];
+      const routing = `Temporal activity ${String(m.activity)}; queue=${String(m.taskQueue)}; namespace=${String(m.namespace)}; connection=${String(m.connection)}`;
+      const owner = workers.map(w => `${w.name} (mode=${w.mode}, registry=${w.registry})`).join(', ');
+      return {
+        label: `${routing} — registered by ${owner}. Configured static routing; not live worker availability.`,
+        compact: `${routing}; worker=${workers.map(w => w.name).join(',')}${at} (configured routing)`,
+        registeredAt,
+      };
+    }
+    if (m?.synthesizedBy === 'openapi-client') {
+      const req = `${String(m.method)} ${String(m.href)}`;
+      const service = String(m.service);
+      return {
+        label: `HTTP request ${req} → ${service} — configured OpenAPI destination; runtime options can override it. Contract: ${String(m.contract)}`,
+        compact: `dynamic: HTTP ${req} → ${service} (OpenAPI; configured default, overrides possible)${at}`,
+        registeredAt,
+      };
+    }
     if (m?.synthesizedBy === 'http-client') {
       const req = `${String(m.method ?? 'GET')} ${String(m.href ?? '')}`.trim();
       return {

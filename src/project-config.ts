@@ -27,11 +27,17 @@ import * as path from 'path';
 import { Language } from './types';
 import { isLanguageSupported } from './extraction/grammars';
 import { logWarn } from './errors';
+import { parseOpenApiBindings, type OpenApiBinding } from './resolution/openapi-config';
+import { parseTemporalBindings, type TemporalBinding } from './resolution/temporal-config';
 
 /** Filename of the project-scoped config, resolved relative to the project root. */
 export const PROJECT_CONFIG_FILENAME = 'codegraph.json';
 
 export interface ProjectConfig {
+  /** Opt-in Temporal deployment scopes and worker factories. */
+  temporal?: TemporalBinding[];
+  /** Opt-in service-scoped OpenAPI/Hey API mappings. */
+  openapi?: OpenApiBinding[];
   /** Map of custom file extension (`.foo`) to a supported language id. */
   extensions?: Record<string, string>;
   /**
@@ -86,6 +92,8 @@ export interface ProjectConfig {
 
 /** Parsed, validated view of a project's `codegraph.json`. */
 interface ParsedConfig {
+  temporal: TemporalBinding[];
+  openapi: OpenApiBinding[];
   extensions: Record<string, Language>;
   includeIgnored: string[];
   exclude: string[];
@@ -109,6 +117,8 @@ const cache = new Map<string, CacheEntry>();
 /** Shared frozen empties so the no-config path allocates nothing. */
 const EMPTY_EXTENSIONS: Record<string, Language> = Object.freeze({});
 const EMPTY_CONFIG: ParsedConfig = Object.freeze({
+  temporal: Object.freeze([]) as unknown as TemporalBinding[],
+  openapi: Object.freeze([]) as unknown as OpenApiBinding[],
   extensions: EMPTY_EXTENSIONS,
   includeIgnored: Object.freeze([]) as unknown as string[],
   exclude: Object.freeze([]) as unknown as string[],
@@ -162,12 +172,16 @@ function parseConfig(file: string): ParsedConfig {
 
   if (!parsed || typeof parsed !== 'object') return EMPTY_CONFIG;
 
+  const openapi = parseOpenApiBindings((parsed as ProjectConfig).openapi);
+  const temporal = parseTemporalBindings((parsed as ProjectConfig).temporal);
   const extensions = extractExtensions(parsed, file);
   const includeIgnored = extractIncludeIgnored(parsed, file);
   const exclude = extractExclude(parsed, file);
   const include = extractInclude(parsed, file);
   const deprioritize = extractPatternList(parsed, file, 'deprioritize');
   if (
+    openapi.length === 0 &&
+    temporal.length === 0 &&
     extensions === EMPTY_EXTENSIONS &&
     includeIgnored.length === 0 &&
     exclude.length === 0 &&
@@ -176,7 +190,7 @@ function parseConfig(file: string): ParsedConfig {
   ) {
     return EMPTY_CONFIG;
   }
-  return { extensions, includeIgnored, exclude, include, deprioritize };
+  return { extensions, includeIgnored, exclude, include, deprioritize, openapi, temporal };
 }
 
 /**
@@ -446,4 +460,13 @@ export function addIncludeIgnoredPatterns(rootDir: string, patterns: string[]): 
   fs.writeFileSync(file, JSON.stringify(config, null, 2) + '\n');
   clearProjectConfigCache();
   return added;
+}
+
+/** Validated bindings; clients still need to be in the normal index scope. */
+export function loadOpenApiBindings(rootDir: string): OpenApiBinding[] {
+  return loadParsedConfig(rootDir).openapi;
+}
+
+export function loadTemporalBindings(rootDir: string): TemporalBinding[] {
+  return loadParsedConfig(rootDir).temporal;
 }
